@@ -1,0 +1,10 @@
+{
+    "engine_config": {
+        "distributed_backend": "nccl",
+        "distributed_timeout_minutes": 15,
+        "pp_size": 1,
+        "cp_size": 1,
+        "cp_strategy": "cp_ulysses",
+        "ulysses_overlap_degree": 1
+    }
+}
