@@ -7,7 +7,7 @@
         "max_grad_norm": 1.0,
         "max_grad_norm_disc": 1.0,
         "lpips_weight": 0.1,
-        "kl_weight": 0.1,
+        "kl_weight": 1e-6,
         "disc_weight": 0.1
     },
     "vae_config": {

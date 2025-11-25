@@ -171,11 +171,12 @@ class VideoData():
         dataloader = torch.utils.data.DataLoader(
             dataset,
             batch_size=self.args.batch_size,
-            shuffle=self.shuffle if train else False,
+            shuffle=sampler is None and self.shuffle and train,
             num_workers=self.args.num_workers,
             pin_memory=True if not self.args.use_gpu_decode else False,
             drop_last=train,
             multiprocessing_context='spawn' if self.args.num_workers > 0 else None,
+            sampler=sampler,
             # persistent_workers=True if self.args.num_workers > 0 else False,
         )
         return dataloader

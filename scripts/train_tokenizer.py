@@ -134,14 +134,14 @@ def main():
                 logits_image_fake = image_disc(recon_videos_in_frames)
                 g_loss = -torch.mean(logits_image_fake) * disc_factor * config.disc_config.disc_gan_weight
             else:
-                g_loss = 0
-            vae_loss_dict["train/g_image_loss"] = g_loss
-            g_loss += recon_loss
-            g_loss += lpips_loss * config.optim_config.lpips_weight
-            g_loss += kl_loss * config.optim_config.kl_weight
+                g_loss = torch.tensor(0.0).to(device)
+            vae_loss_dict["train/g_image_loss"] = g_loss.detach()
+            vae_loss = recon_loss
+            vae_loss += lpips_loss * config.optim_config.lpips_weight
+            vae_loss += kl_loss * config.optim_config.kl_weight
 
         # VAE backward
-        g_loss.backward()
+        vae_loss.backward()
 
         if config.optim_config.max_grad_norm > 0:
             torch.nn.utils.clip_grad_norm_(d_vae.parameters(), config.optim_config.max_grad_norm)
