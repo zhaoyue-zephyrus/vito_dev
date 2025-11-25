@@ -45,7 +45,8 @@ def dist_init(config):
             rank=rank,
             timeout=timedelta(minutes=config.engine_config.distributed_timeout_minutes),
         )
-    assert config.engine_config.cp_size * config.engine_config.pp_size == torch.distributed.get_world_size()
+    assert config.engine_config.dp_size * config.engine_config.cp_size * config.engine_config.pp_size == torch.distributed.get_world_size()
+    print_rank_0(f"Distributed backend: {torch.distributed.get_backend()}")
     if device_count > 0:
         if mpu.model_parallel_is_initialized():
             print_rank_0("Model parallel is already initialized")

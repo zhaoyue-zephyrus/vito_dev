@@ -7,10 +7,11 @@ class Normalize(nn.Module):
     def __init__(self, in_channels, norm_type):
         super().__init__()
         assert norm_type in ['group', 'batch', "no"]
+        self.norm_type = norm_type
         if norm_type == 'group':
             if in_channels % 32 == 0:
                 self.norm = nn.GroupNorm(num_groups=32, num_channels=in_channels, eps=1e-6, affine=True)
-            elif in_channels % 24 == 0: 
+            elif in_channels % 24 == 0:
                 self.norm = nn.GroupNorm(num_groups=24, num_channels=in_channels, eps=1e-6, affine=True)
             else:
                 raise NotImplementedError
@@ -18,10 +19,17 @@ class Normalize(nn.Module):
             self.norm = nn.SyncBatchNorm(in_channels, track_running_stats=False) # Runtime Error: grad inplace if set track_running_stats to True
         elif norm_type == 'no':
             self.norm = nn.Identity()
-    
+
     def forward(self, x):
         assert x.ndim == 4
-        x = self.norm(x)
+        # SyncBatchNorm doesn't support bfloat16, so cast to fp32 and back
+        if self.norm_type == 'batch' and x.dtype == torch.bfloat16:
+            input_dtype = x.dtype
+            x = x.to(torch.float32)
+            x = self.norm(x)
+            x = x.to(input_dtype)
+        else:
+            x = self.norm(x)
         return x
 
 

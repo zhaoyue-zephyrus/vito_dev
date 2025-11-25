@@ -2,7 +2,7 @@
 
 export LD_LIBRARY_PATH=/scr/yzz/miniconda3/envs/vito/lib/
 
-CUDA_VISIBLE_DEVICES=0 \
+CUDA_VISIBLE_DEVICES=0,1,2,3 \
 PYTHONPATH=. \
 torchrun \
 --nproc_per_node=4 \

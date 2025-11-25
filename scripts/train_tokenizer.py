@@ -89,7 +89,7 @@ def main():
         model_optims, init_step = resume_from_ckpt(state_dict, model_optims, load_optimizer=True)
 
     d_vae = DistributedDataParallel(d_vae, device_ids=[device], output_device=device)
-    disc_ddp = DistributedDataParallel(image_disc, device_ids=[device], output_device=device)
+    image_disc = DistributedDataParallel(image_disc, device_ids=[device], output_device=device)
     perceptual_model = LPIPS().to(device)
     disc_loss = get_disc_loss(config.disc_config.disc_loss_type)
 
@@ -154,8 +154,8 @@ def main():
             if config.disc_config.disc_disc_weight > 0:
                 opt_disc.zero_grad()
                 with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-                    logits_real = disc_ddp(videos_in_frames, pool_name="real")
-                    logits_fake = disc_ddp(recon_videos_in_frames.detach(), pool_name="fake")
+                    logits_real = image_disc(videos_in_frames, pool_name="real")
+                    logits_fake = image_disc(recon_videos_in_frames.detach(), pool_name="fake")
                     d_loss = disc_loss(logits_real, logits_fake)
                     disc_loss_dict["train/logits_image_real"] = logits_real.mean().detach()
                     disc_loss_dict["train/logits_image_fake"] = logits_fake.mean().detach()
@@ -195,7 +195,7 @@ def main():
                     'step': global_step,
                     **save_dict,
                 }, checkpoint_path)
-                vito_logger.info(f"Saved checkpoint to: {ckpt_path}")
+                vito_logger.info(f"Saved checkpoint to: {checkpoint_path}")
 
 
 if __name__ == "__main__":

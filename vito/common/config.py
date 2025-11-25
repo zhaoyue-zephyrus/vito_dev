@@ -44,6 +44,7 @@ class EngineConfig:
     # Parallism strategy
     distributed_backend: str = "nccl"  # Choices: ["nccl", "gloo"]
     distributed_timeout_minutes: int = 10  # Timeout minutes for torch.distributed.
+    dp_size: int = 1  # Degree of data parallelism.
     pp_size: int = 1  # Degree of pipeline model parallelism.
     cp_size: int = 1  # Degree of context parallelism.
     cp_strategy: str = "none"  # Choices: ["none", "cp_ulysses", "cp_shuffle_overlap"]

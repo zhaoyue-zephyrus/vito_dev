@@ -1,6 +1,6 @@
 {
     "optim_config": {
-        "lr": 1e-4,
+        "lr": 1e-5,
         "max_steps": 1000000,
         "weight_decay": 0.1,
         "betas": [0.9, 0.95],
@@ -47,6 +47,7 @@
     "engine_config": {
         "distributed_backend": "nccl",
         "distributed_timeout_minutes": 15,
+        "dp_size": 4,
         "pp_size": 1,
         "cp_size": 1,
         "cp_strategy": "cp_ulysses",
