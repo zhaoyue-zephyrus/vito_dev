@@ -1,0 +1,55 @@
+{
+    "optim_config": {
+        "lr": 1e-4,
+        "max_steps": 100,
+        "weight_decay": 0.1,
+        "betas": [0.9, 0.95],
+        "max_grad_norm": 1.0,
+        "max_grad_norm_disc": 1.0,
+        "lpips_weight": 0.1,
+        "kl_weight": 0.1,
+        "disc_weight": 0.1
+    },
+    "vae_config": {
+        "ddconfig": {
+            "conv_last_layer": true,
+            "depth": 24,
+            "double_z": true,
+            "embed_dim": 1024,
+            "in_chans": 3,
+            "ln_in_attn": true,
+            "mlp_ratio": 4,
+            "norm_code": false,
+            "num_heads": 16,
+            "patch_length": 4,
+            "patch_size": 8,
+            "qkv_bias": true,
+            "video_length": 16,
+            "video_size": 256,
+            "z_chans": 16
+        },
+        "model_type": "vit"
+    },
+    "disc_config": {
+        "disc_layers": 3,
+        "base_ch_disc": 128,
+        "disc_pool": false,
+        "disc_pool_size": 1000,
+        "disc_warmup_steps": 0,
+        "disc_lr_multiplier": 1.0,
+        "discriminator_iter_start": 0,
+        "disc_pretrain_iter": 0,
+        "disc_optim_steps": 1,
+        "disc_loss_type": "hinge",
+        "disc_gan_weight": 0.3,
+        "disc_disc_weight": 1.0
+    },
+    "engine_config": {
+        "distributed_backend": "nccl",
+        "distributed_timeout_minutes": 15,
+        "pp_size": 1,
+        "cp_size": 1,
+        "cp_strategy": "cp_ulysses",
+        "ulysses_overlap_degree": 1
+    }
+}

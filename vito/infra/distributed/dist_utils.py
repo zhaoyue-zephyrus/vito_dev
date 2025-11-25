@@ -90,3 +90,18 @@ def get_device(local_rank=None):
     else:
         raise RuntimeError
     return device
+
+
+def reduce_losses(loss_dict, dst=0):
+    loss_names = list(loss_dict.keys())
+    loss_tensor = torch.stack([loss_dict[name] for name in loss_names])
+
+    torch.distributed.reduce(loss_tensor, dst=dst, op=torch.distributed.ReduceOp.SUM)
+    # Only average the loss values on the destination rank
+    if torch.distributed.get_rank() == dst:
+        loss_tensor /= torch.distributed.get_world_size()
+        averaged_losses = {name: loss_tensor[i].item() for i, name in enumerate(loss_names)}
+    else:
+        averaged_losses = {name: None for name in loss_names}
+
+    return averaged_losses

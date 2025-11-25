@@ -294,10 +294,10 @@ class Attention(nn.Module):
             k[:, 1:, :] = apply_rot_embed(k[:, 1:, :], sin_emb, cos_emb).bfloat16()
             x = flash_attn_func(q, k, v, dropout_p=self.attn_drop_rate)
         else:
-            x = flash_attn_qkvpacked_func(qkv=qkv.bfloat16(), dropout_p=self.attn_drop_rate)
+            # x = flash_attn_qkvpacked_func(qkv=qkv.bfloat16(), dropout_p=self.attn_drop_rate)
+            x = flash_attn_qkvpacked_func(qkv=qkv, dropout_p=self.attn_drop_rate)
         # x = v
         x = x.reshape(B, N, C)
-        # import ipdb; ipdb.set_trace()
         x = self.proj(x)
         x = self.proj_drop(x)
         return x

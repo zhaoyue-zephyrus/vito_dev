@@ -8,10 +8,15 @@ import torch
 @dataclasses.dataclass
 class OptimConfig:
     lr: float = 1e-4
+    max_steps: int = 500
     weight_decay: float = 0.0
     betas: tuple[float, float] = (0.9, 0.95)
     max_grad_norm: float = 1.0
     max_grad_norm_disc: float = 1.0
+
+    lpips_weight: float = 0.1
+    kl_weight: float = 0.1
+    disc_weight: float = 0.1
 
 @dataclasses.dataclass
 class VAEConfig:
@@ -72,7 +77,7 @@ class VitoConfig:
         # Create nested configs
         optim_config = cls._create_nested_config(config_dict, "optim_config", OptimConfig)
         vae_config = cls._create_nested_config(config_dict, "vae_config", VAEConfig)
-        disc_config = cls._create_nested_config(config_dict, "discriminator_config", DiscriminatorConfig)
+        disc_config = cls._create_nested_config(config_dict, "disc_config", DiscriminatorConfig)
         engine_config = cls._create_nested_config(config_dict, "engine_config", EngineConfig)
 
         return cls(
