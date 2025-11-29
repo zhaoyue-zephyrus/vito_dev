@@ -38,6 +38,8 @@ class DiscriminatorConfig:
     disc_loss_type: Literal["hinge", "vanilla"] = "hinge"
     disc_gan_weight: float = 0.3
     disc_disc_weight: float = 1.0
+    use_lecam_reg_zero: bool = False
+    lecam_weight: float = 0.05
 
 @dataclasses.dataclass
 class EngineConfig:

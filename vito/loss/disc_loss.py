@@ -32,3 +32,11 @@ def adopt_weight(global_step, threshold=0, value=0., warmup=0):
         if global_step - threshold < warmup:
             weight = min((global_step - threshold) / warmup, 1)
     return weight
+
+
+def lecam_reg_zero(real_pred, fake_pred, thres=0.1):
+    # avoid logits get too high
+    assert real_pred.ndim == 0
+    reg = torch.mean(F.relu(torch.abs(real_pred) - thres).pow(2)) + \
+    torch.mean(F.relu(torch.abs(fake_pred) - thres).pow(2))
+    return reg

@@ -1,6 +1,7 @@
 import argparse
 from einops import rearrange
 import os
+from safetensors.torch import load_file
 import time
 import torch
 import torch.distributed as dist
@@ -12,9 +13,12 @@ from vito.common.checkpoint import get_last_ckpt, resume_from_ckpt
 from vito.common.common_utils import set_random_seed
 from vito.common.config import VitoConfig
 from vito.common.logger import vito_logger
+from vito.evaluation.psnr import get_psnr
+from vito.evaluation.lpips import get_lpips
+from vito.evaluation.ssim import get_ssim_and_msssim
 from vito.data.vanilla_video_dataset import VideoData
 from vito.infra.distributed.dist_utils import dist_init, reduce_losses
-from vito.loss.disc_loss import adopt_weight, get_disc_loss
+from vito.loss.disc_loss import adopt_weight, get_disc_loss, lecam_reg_zero
 from vito.loss.lpips import LPIPS
 from vito.model.discriminator import ImageDiscriminator
 from vito.model.vae.vae_model import ViTVAE
@@ -28,6 +32,8 @@ def parse_arguments():
     parser.add_argument("--save_every", type=int, default=1000)
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--use_wandb", action="store_true")
+    parser.add_argument("--evaluate", action="store_true")
+    parser.add_argument("--checkpoint", type=str, help="Path to a checkpoint to resume from")
     parser = VideoData.add_data_specific_args(parser)
     return parser.parse_args()
 
@@ -62,6 +68,8 @@ def main():
     if not hasattr(dataloader.sampler, 'set_epoch'):
         vito_logger.warning("Dataloader sampler does not support set_epoch, skipping epoch update")
     dataloader_iter = iter(dataloader)
+    val_dataloader = data.val_dataloader()
+    val_dataloader_iter = iter(val_dataloader)
     data_epoch = 0
 
     # init model
@@ -78,6 +86,17 @@ def main():
         "opt_disc": opt_disc,
     }
 
+    if args.evaluate:
+        assert args.checkpoint is not None, "Checkpoint must be provided for evaluation mode"
+        if args.checkpoint.endswith("safetensors"):
+            state_dict = load_file(args.checkpoint)
+            d_vae.load_state_dict(state_dict)
+        else:
+            state_dict = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
+            d_vae.load_state_dict(state_dict["d_vae"])
+        d_vae = DistributedDataParallel(d_vae, device_ids=[device], output_device=device)
+        evaluate(d_vae, val_dataloader_iter)
+        return
     # resume from default_root_dir
     ckpt_path = None
     assert not args.default_root_dir is None 
@@ -160,7 +179,13 @@ def main():
                     disc_loss_dict["train/logits_image_real"] = logits_real.mean().detach()
                     disc_loss_dict["train/logits_image_fake"] = logits_fake.mean().detach()
                     disc_loss_dict["train/d_image_loss"] = d_loss.detach()
-                    disc_loss_val = d_loss * config.optim_config.disc_weight * disc_factor
+                    disc_loss_val = d_loss * config.optim_config.disc_weight
+                    if global_step >= config.disc_config.discriminator_iter_start and config.disc_config.use_lecam_reg_zero:
+                        lecam_zero_loss = lecam_reg_zero(logits_real.mean(), logits_fake.mean())
+                        disc_loss_dict["train/lecam_zero_loss"] = lecam_zero_loss.detach()
+                        disc_loss_val += lecam_zero_loss * config.disc_config.lecam_weight
+                    disc_loss_val = disc_loss_val * disc_factor
+
                 disc_loss_val.backward()
                 if config.optim_config.max_grad_norm_disc > 0:
                     torch.nn.utils.clip_grad_norm_(image_disc.parameters(), config.optim_config.max_grad_norm_disc)
@@ -196,6 +221,45 @@ def main():
                     **save_dict,
                 }, checkpoint_path)
                 vito_logger.info(f"Saved checkpoint to: {checkpoint_path}")
+
+def evaluate(d_vae, dataloader_iter):
+    # Run evaluation: iterate through the provided dataloader iterator and perform inference.
+    # d_vae can be a DistributedDataParallel wrapper; get device from model parameters.
+    device = next(d_vae.parameters()).device if hasattr(d_vae, "parameters") else torch.device("cuda")
+    psnr_list, lpips_list, ssim_list, msssim_list = [], [], [], []
+    d_vae.eval()
+    with torch.no_grad():
+        with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+            for batch in dataloader_iter:
+                videos = batch["video"].to(device)  # (B, T, C, H, W)
+                videos = videos.to(torch.bfloat16)
+                videos = videos.permute(0, 2, 1, 3, 4)
+                recon_videos, _ = d_vae(videos)
+                psnr = get_psnr(videos, recon_videos, zero_mean=True, is_video=True)
+                lpips = get_lpips(videos, recon_videos, zero_mean=True, network_type='alex', is_video=True)
+                ssim, msssim = get_ssim_and_msssim(videos, recon_videos, zero_mean=True, is_video=True)
+                gathered_psnr = [torch.zeros_like(psnr) for _ in range(dist.get_world_size())]
+                dist.all_gather(gathered_psnr, psnr)
+                psnr_list.extend(gathered_psnr)
+                gathered_lpips = [torch.zeros_like(lpips) for _ in range(dist.get_world_size())]
+                dist.all_gather(gathered_lpips, lpips)
+                lpips_list.extend(gathered_lpips)
+                gathered_ssim = [torch.zeros_like(ssim) for _ in range(dist.get_world_size())]
+                dist.all_gather(gathered_ssim, ssim)
+                ssim_list.extend(gathered_ssim)
+                gathered_msssim = [torch.zeros_like(msssim) for _ in range(dist.get_world_size())]
+                dist.all_gather(gathered_msssim, msssim)
+                msssim_list.extend(gathered_msssim)
+    psnr_list = torch.cat(psnr_list)
+    lpips_list = torch.cat(lpips_list)
+    ssim_list = torch.cat(ssim_list)
+    msssim_list = torch.cat(msssim_list)
+    if dist.get_rank() == 0:
+        print(f"PSNR={psnr_list.mean().item()}")
+        print(f"LPIPS (AlexNet) = {lpips_list.mean().item()}")
+        print(f"SSIM = {ssim_list.mean().item()}")
+        print(f"MSSSIM = {msssim_list.mean().item()}")
+        vito_logger.info("Evaluation completed")
 
 
 if __name__ == "__main__":
