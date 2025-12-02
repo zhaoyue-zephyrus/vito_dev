@@ -23,6 +23,7 @@ from diffusers.models.modeling_utils import ModelMixin
 from diffusers.configuration_utils import register_to_config
 
 from vito.infra.parallelism import TileProcessor
+from vito.model.vae.titok_module import TiTokDecoder, TiTokEncoder
 from vito.model.vae.vae_module import DiagonalGaussianDistribution, ViTDecoder, ViTEncoder
 
 
@@ -221,7 +222,7 @@ class VideoTokenizerABC(ABC):
 
 class ViTVAE(ModelMixin, ConfigMixin, VideoTokenizerABC):
     @register_to_config
-    def __init__(self, ddconfig: dict, model_type: Literal['vit', 'vit_ncthw'] = 'vit'):
+    def __init__(self, ddconfig: dict, model_type: Literal['vit', 'vit_ncthw', 'titok'] = 'vit'):
         super().__init__()
 
         if model_type == 'vit':
@@ -232,6 +233,9 @@ class ViTVAE(ModelMixin, ConfigMixin, VideoTokenizerABC):
 
             self.encoder = ViTEncoderNCTHW(**ddconfig)
             self.decoder = ViTDecoderNCTHW(**ddconfig)
+        elif model_type == 'titok':
+            self.encoder = TiTokEncoder(**ddconfig)
+            self.decoder = TiTokDecoder(**ddconfig)
         else:
             raise ValueError(f"model_type {model_type} not supported")
 
