@@ -15,6 +15,7 @@
 import json
 import os
 from abc import ABC, abstractmethod
+from safetensors.torch import load_file
 from typing import Literal, Optional
 
 import torch
@@ -222,32 +223,72 @@ class VideoTokenizerABC(ABC):
 
 class ViTVAE(ModelMixin, ConfigMixin, VideoTokenizerABC):
     @register_to_config
-    def __init__(self, ddconfig: dict, model_type: Literal['vit', 'vit_ncthw', 'titok'] = 'vit'):
+    def __init__(
+        self,
+        encoder_config: dict,
+        decoder_config: dict | None = None,
+        pretrained: str | None = None,
+        model_type: Literal['vit', 'vit_ncthw', 'titok'] = 'vit'):
         super().__init__()
 
+        if decoder_config is None:
+            decoder_config = encoder_config
+
         if model_type == 'vit':
-            self.encoder = ViTEncoder(**ddconfig)
-            self.decoder = ViTDecoder(**ddconfig)
+            self.encoder = ViTEncoder(**encoder_config)
+            self.decoder = ViTDecoder(**decoder_config)
         elif model_type == 'vit_ncthw':
             from videotokenizer.modules.vit_ncthw import ViTDecoderNCTHW, ViTEncoderNCTHW
 
-            self.encoder = ViTEncoderNCTHW(**ddconfig)
-            self.decoder = ViTDecoderNCTHW(**ddconfig)
+            self.encoder = ViTEncoderNCTHW(**encoder_config)
+            self.decoder = ViTDecoderNCTHW(**decoder_config)
         elif model_type == 'titok':
-            self.encoder = TiTokEncoder(**ddconfig)
-            self.decoder = TiTokDecoder(**ddconfig)
+            self.encoder = TiTokEncoder(**encoder_config)
+            self.decoder = TiTokDecoder(**decoder_config)
         else:
             raise ValueError(f"model_type {model_type} not supported")
-
-        if 'patch_length' in ddconfig:
-            self._temporal_downsample_factor = ddconfig['patch_length']
+        if 'patch_length' in encoder_config:
+            self._temporal_downsample_factor = encoder_config['patch_length']
         else:
             self._temporal_downsample_factor = 1
 
-        if 'patch_size' in ddconfig:
-            self._spatial_downsample_factor = ddconfig['patch_size']
+        if 'patch_size' in encoder_config:
+            self._spatial_downsample_factor = encoder_config['patch_size']
         else:
             self._spatial_downsample_factor = 8
+
+        if pretrained is not None:
+            if model_type == 'titok':
+                assert "titok" in pretrained, "pretrained weights not match model type"
+                state_dict = load_file(pretrained)
+                # titok pretrained weights compatibility
+                # titok takes input range[0, 1], while we use [-1, 1]
+                #    w' * (2x-1) + b' = w * x + b
+                # => w' = w / 2; b' = b + w / 2 = b + w'
+                state_dict["encoder.patch_embed.weight"].mul_(0.5)
+                state_dict["encoder.patch_embed.bias"].add_(state_dict["encoder.patch_embed.weight"].sum([1,2,3]))
+                state_dict["decoder.conv_out.weight"].mul_(2.0)
+                state_dict["decoder.conv_out.bias"].mul_(2.0).sub_(1.0)
+                # inflate positional embeddings
+                pe_cls, pe_spatial = state_dict["encoder.positional_embedding"][0:1], state_dict["encoder.positional_embedding"][1:]
+                state_dict["encoder.positional_embedding"] = torch.cat(
+                    [pe_cls, pe_spatial.repeat(encoder_config['video_length'] // encoder_config['patch_length'], 1)], dim=0)
+                pe_cls, pe_spatial = state_dict["decoder.positional_embedding"][0:1], state_dict["decoder.positional_embedding"][1:]
+                state_dict["decoder.positional_embedding"] = torch.cat(
+                    [pe_cls, pe_spatial.repeat(decoder_config['video_length'] // decoder_config['patch_length'], 1)], dim=0)
+                # Move latent tokens insides encoder
+                state_dict["encoder.latent_tokens"] = state_dict.pop("latent_tokens")
+                # inflate patch embedding weights
+                state_dict["encoder.patch_embed.weight"] = state_dict["encoder.patch_embed.weight"].unsqueeze(2).repeat(1, 1, encoder_config['patch_length'], 1, 1) / (encoder_config['patch_length'] ** 0.5)
+                state_dict["decoder.ffn.0.weight"] = state_dict["decoder.ffn.0.weight"].unsqueeze(2).repeat(encoder_config["patch_length"], 1, 1, 1, 1) / (encoder_config['patch_length'] ** 0.5)
+                state_dict["decoder.ffn.0.bias"] = state_dict["decoder.ffn.0.bias"].repeat(encoder_config["patch_length"],)
+                state_dict["decoder.conv_out.weight"] = state_dict["decoder.conv_out.weight"].unsqueeze(2).repeat(1, 1, 3, 1, 1) / (3 ** 0.5)
+                state_dict.pop("decoder.text_guidance_positional_embedding")
+                state_dict.pop("decoder.text_guidance_proj.bias")
+                state_dict.pop("decoder.text_guidance_proj.weight")
+                self.load_state_dict(state_dict, strict=True)
+            else:
+                raise NotImplementedError("Only titok pretrained weights loading is implemented now.")
 
     @property
     def spatial_downsample_factor(self):

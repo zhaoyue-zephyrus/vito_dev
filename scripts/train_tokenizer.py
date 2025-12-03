@@ -47,6 +47,8 @@ def main():
     device = rank % torch.cuda.device_count()
     torch.cuda.set_device(device)
 
+    vito_logger.info(f"{config=}")
+
     if rank == 0:
         os.makedirs(args.default_root_dir, exist_ok=True)
         checkpoint_dir = os.path.join(args.default_root_dir, "checkpoints")
@@ -73,7 +75,12 @@ def main():
     data_epoch = 0
 
     # init model
-    d_vae = ViTVAE(config.vae_config.ddconfig, config.vae_config.model_type).to(device)
+    d_vae = ViTVAE(
+        config.vae_config.encoder_config,
+        config.vae_config.decoder_config,
+        pretrained=config.vae_config.pretrained,
+        model_type=config.vae_config.model_type,
+    ).to(device)
     image_disc = ImageDiscriminator(config.disc_config).to(device)    
 
     opt_vae = torch.optim.AdamW(d_vae.parameters(), lr=config.optim_config.lr)

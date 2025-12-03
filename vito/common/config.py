@@ -20,9 +20,10 @@ class OptimConfig:
 
 @dataclasses.dataclass
 class VAEConfig:
-    ddconfig: dict
-    model_type: Literal["vit", "vit_ncthw"]
-
+    encoder_config: dict
+    decoder_config: dict
+    model_type: Literal["vit", "vit_ncthw", "titok"]
+    pretrained: str | None = None
 
 @dataclasses.dataclass
 class DiscriminatorConfig:
@@ -61,21 +62,33 @@ class VitoConfig:
     engine_config: EngineConfig
 
     @classmethod
-    def _check_missing_fields(cls, config_dict: dict, required_fields: list):
+    def _check_missing_fields(cls, config_dict: dict, config_cls):
+        """
+        Check for missing fields and fill them with default values from the dataclass.
+        Raises ValueError only if a required field (no default) is missing.
+        """
         actual_fields = set(config_dict.keys())
-        missing_fields = set(required_fields) - actual_fields
-        if missing_fields:
-            raise ValueError(f"Missing fields in the configuration file: {', '.join(missing_fields)}")
+        required_fields = set(config_cls.__dataclass_fields__.keys())
+        missing_fields = required_fields - actual_fields
+
+        for field_name in missing_fields:
+            field = config_cls.__dataclass_fields__[field_name]
+            if field.default is not dataclasses.MISSING:
+                config_dict[field_name] = field.default
+            elif field.default_factory is not dataclasses.MISSING:
+                config_dict[field_name] = field.default_factory()
+            else:
+                raise ValueError(f"Missing required field '{field_name}' with no default value in {config_cls.__name__}")
 
     @classmethod
     def _create_nested_config(cls, config_dict: dict, config_name: str, config_cls):
         nested_config_dict = config_dict.get(config_name, {})
-        cls._check_missing_fields(nested_config_dict, config_cls.__dataclass_fields__.keys())
+        cls._check_missing_fields(nested_config_dict, config_cls)
         return config_cls(**nested_config_dict)
 
     @classmethod
     def _create_config_from_dict(cls, config_dict: dict):
-        cls._check_missing_fields(config_dict, cls.__dataclass_fields__.keys())
+        cls._check_missing_fields(config_dict, cls)
 
         # Create nested configs
         optim_config = cls._create_nested_config(config_dict, "optim_config", OptimConfig)

@@ -11,7 +11,7 @@
         "disc_weight": 0.1
     },
     "vae_config": {
-        "ddconfig": {
+        "encoder_config": {
             "conv_last_layer": true,
             "depth": 24,
             "double_z": true,

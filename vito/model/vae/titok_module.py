@@ -141,7 +141,7 @@ class TiTokEncoder(nn.Module):
         latent_tokens = self.ln_post(latent_tokens)
         # fake 2D shape
         if self.is_legacy:
-            latent_tokens = latent_tokens.reshape(batch_size, self.width, self.num_latent_tokens, 1)
+            raise NotImplementedError("Legacy decoder is not supported.")
         else:
             # Fix legacy problem.
             latent_tokens = latent_tokens.reshape(batch_size, self.num_latent_tokens, self.width, 1).permute(0, 2, 1, 3)
@@ -210,12 +210,7 @@ class TiTokDecoder(nn.Module):
         self.ln_post = nn.LayerNorm(self.width)
 
         if self.is_legacy:
-            self.ffn = nn.Sequential(
-                nn.Conv3d(self.width, 2 * self.width, 1, padding=0, bias=True),
-                nn.Tanh(),
-                nn.Conv3d(2 * self.width, 1024, 1, padding=0, bias=True),
-            )
-            self.conv_out = nn.Identity()
+            raise NotImplementedError("Legacy decoder is not supported.")
         else:
             # Directly predicting RGB pixels
             self.ffn = nn.Sequential(

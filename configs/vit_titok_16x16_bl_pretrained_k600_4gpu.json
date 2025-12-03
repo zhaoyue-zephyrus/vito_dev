@@ -22,13 +22,33 @@
             "norm_code": false,
             "num_heads": 12,
             "patch_length": 4,
-            "patch_size": 8,
+            "patch_size": 16,
             "qkv_bias": true,
-            "video_length": 8,
+            "video_length": 16,
             "video_size": 256,
-            "z_chans": 16
+            "z_chans": 16,
+	        "use_final_proj": true
         },
-        "model_type": "vit"
+        "decoder_config": {
+            "conv_last_layer": true,
+            "depth": 24,
+            "double_z": true,
+            "embed_dim": 1024,
+            "in_chans": 3,
+            "ln_in_attn": true,
+            "mlp_ratio": 4,
+            "norm_code": false,
+            "num_heads": 16,
+            "patch_length": 4,
+            "patch_size": 16,
+            "qkv_bias": true,
+            "video_length": 16,
+            "video_size": 256,
+            "z_chans": 16,
+	        "use_final_proj": true
+        },
+        "pretrained": "downloads/tokenizer_tatitok_bl64_vae/model.safetensors",
+        "model_type": "titok"
     },
     "disc_config": {
         "disc_layers": 3,
@@ -49,7 +69,7 @@
     "engine_config": {
         "distributed_backend": "nccl",
         "distributed_timeout_minutes": 15,
-        "dp_size": 1,
+        "dp_size": 4,
         "pp_size": 1,
         "cp_size": 1,
         "cp_strategy": "cp_ulysses",

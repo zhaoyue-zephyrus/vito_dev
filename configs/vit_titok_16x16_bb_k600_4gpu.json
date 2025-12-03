@@ -11,7 +11,7 @@
         "disc_weight": 0.1
     },
     "vae_config": {
-        "ddconfig": {
+        "encoder_config": {
             "conv_last_layer": true,
             "depth": 12,
             "double_z": true,
@@ -27,7 +27,7 @@
             "video_length": 16,
             "video_size": 256,
             "z_chans": 16,
-	    "use_final_proj": true
+	        "use_final_proj": true
         },
         "model_type": "titok"
     },
